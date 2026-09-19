@@ -35,7 +35,11 @@ export class ArmCurlAnalyzer implements IExerciseAnalyzer {
   private repHistory: RepRecord[] = [];
 
   private repStartTime: number = 0;
+  private bottomTimestamp: number = 0;
+  private startingElbowAngle: number = 140;
   private minElbowAngleInRep: number = 180;
+  private minLeftElbowInRep: number = 180;
+  private minRightElbowInRep: number = 180;
   private maxElbowAngleInRep: number = 0;
 
   private activeRepIssues: Map<string, PostureIssue> = new Map();
@@ -131,7 +135,11 @@ export class ArmCurlAnalyzer implements IExerciseAnalyzer {
           // Immediately enter flex phase on upward movement
           this.currentState = 'DESCENDING';
           this.repStartTime = now;
+          this.bottomTimestamp = now;
+          this.startingElbowAngle = elbowAngle;
           this.minElbowAngleInRep = elbowAngle;
+          this.minLeftElbowInRep = angles.leftElbowAngle;
+          this.minRightElbowInRep = angles.rightElbowAngle;
           this.maxElbowAngleInRep = elbowAngle;
           this.activeRepIssues.clear();
           this.depthAchieved = false;
@@ -143,9 +151,12 @@ export class ArmCurlAnalyzer implements IExerciseAnalyzer {
 
       case 'DESCENDING': // Flexing bicep upward
         this.minElbowAngleInRep = Math.min(this.minElbowAngleInRep, elbowAngle);
+        this.minLeftElbowInRep = Math.min(this.minLeftElbowInRep, angles.leftElbowAngle);
+        this.minRightElbowInRep = Math.min(this.minRightElbowInRep, angles.rightElbowAngle);
 
         if (isPeakSqueezeReached) {
           this.currentState = 'BOTTOM';
+          this.bottomTimestamp = now;
           this.depthAchieved = true;
 
           if (isLastRep) {
@@ -171,6 +182,9 @@ export class ArmCurlAnalyzer implements IExerciseAnalyzer {
 
       case 'BOTTOM': // Top of curl (Peak Squeeze)
         this.minElbowAngleInRep = Math.min(this.minElbowAngleInRep, elbowAngle);
+        this.minLeftElbowInRep = Math.min(this.minLeftElbowInRep, angles.leftElbowAngle);
+        this.minRightElbowInRep = Math.min(this.minRightElbowInRep, angles.rightElbowAngle);
+        this.bottomTimestamp = now;
 
         if (isLastRep) {
           const elapsed = now - this.holdStartTimestamp;
@@ -225,14 +239,33 @@ export class ArmCurlAnalyzer implements IExerciseAnalyzer {
             feedbackType = 'ERROR';
           }
 
+          const durationMs = now - this.repStartTime;
+          const eccentricMs = Math.max(0, this.bottomTimestamp - this.repStartTime);
+          const concentricMs = Math.max(0, now - this.bottomTimestamp);
+          const asymmetry = Math.abs(this.minLeftElbowInRep - this.minRightElbowInRep);
+          const rom = Math.max(0, this.startingElbowAngle - this.minElbowAngleInRep);
+          const margin = this.targetCurlAngle - this.minElbowAngleInRep;
+
           completedRecord = {
             repNumber: this.correctReps,
             isCorrect: this.depthAchieved,
-            maxKneeDepthAngle: this.minElbowAngleInRep,
+            maxKneeDepthAngle: Math.round(this.minElbowAngleInRep * 10) / 10,
             minTorsoAngle: 0,
-            durationMs: now - this.repStartTime,
+            durationMs,
             issues: [],
             timestamp: now,
+            leftElbowAngle: Math.round(this.minLeftElbowInRep * 10) / 10,
+            rightElbowAngle: Math.round(this.minRightElbowInRep * 10) / 10,
+            startingAngle: Math.round(this.startingElbowAngle * 10) / 10,
+            peakFlexionAngle: Math.round(this.minElbowAngleInRep * 10) / 10,
+            endingAngle: Math.round(elbowAngle * 10) / 10,
+            rangeOfMotion: Math.round(rom * 10) / 10,
+            targetThresholdAngle: this.targetCurlAngle,
+            angleMargin: Math.round(margin * 10) / 10,
+            eccentricDurationMs: eccentricMs,
+            concentricDurationMs: concentricMs,
+            isometricDurationMs: isLastRep ? (now - this.holdStartTimestamp) : 0,
+            asymmetryDegrees: Math.round(asymmetry * 10) / 10,
           };
 
           this.repHistory.push(completedRecord);

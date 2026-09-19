@@ -33,7 +33,13 @@ export class SquatAnalyzer implements IExerciseAnalyzer {
   private repHistory: RepRecord[] = [];
 
   private repStartTime: number = 0;
+  private bottomTimestamp: number = 0;
+  private startingKneeAngle: number = 160;
   private minKneeAngleInRep: number = 180;
+  private minLeftKneeInRep: number = 180;
+  private minRightKneeInRep: number = 180;
+  private minLeftHipInRep: number = 180;
+  private minRightHipInRep: number = 180;
   private maxTorsoLeanInRep: number = 0;
 
   private activeRepIssues: Map<string, PostureIssue> = new Map();
@@ -148,7 +154,13 @@ export class SquatAnalyzer implements IExerciseAnalyzer {
           // Triggers ONLY when knees AND hips flex together! Moving shoulders does NOTHING.
           this.currentState = 'DESCENDING';
           this.repStartTime = now;
+          this.bottomTimestamp = now;
+          this.startingKneeAngle = kneeAngle;
           this.minKneeAngleInRep = kneeAngle;
+          this.minLeftKneeInRep = angles.leftKneeAngle;
+          this.minRightKneeInRep = angles.rightKneeAngle;
+          this.minLeftHipInRep = angles.leftHipAngle;
+          this.minRightHipInRep = angles.rightHipAngle;
           this.maxTorsoLeanInRep = torsoLean;
           this.activeRepIssues.clear();
           this.depthAchieved = false;
@@ -161,10 +173,15 @@ export class SquatAnalyzer implements IExerciseAnalyzer {
 
       case 'DESCENDING':
         this.minKneeAngleInRep = Math.min(this.minKneeAngleInRep, kneeAngle);
+        this.minLeftKneeInRep = Math.min(this.minLeftKneeInRep, angles.leftKneeAngle);
+        this.minRightKneeInRep = Math.min(this.minRightKneeInRep, angles.rightKneeAngle);
+        this.minLeftHipInRep = Math.min(this.minLeftHipInRep, angles.leftHipAngle);
+        this.minRightHipInRep = Math.min(this.minRightHipInRep, angles.rightHipAngle);
         this.maxTorsoLeanInRep = Math.max(this.maxTorsoLeanInRep, torsoLean);
 
         if (isTrueTargetAngleReached) {
           this.currentState = 'BOTTOM';
+          this.bottomTimestamp = now;
           this.depthAchieved = true;
 
           if (isLastRep) {
@@ -189,7 +206,12 @@ export class SquatAnalyzer implements IExerciseAnalyzer {
 
       case 'BOTTOM':
         this.minKneeAngleInRep = Math.min(this.minKneeAngleInRep, kneeAngle);
+        this.minLeftKneeInRep = Math.min(this.minLeftKneeInRep, angles.leftKneeAngle);
+        this.minRightKneeInRep = Math.min(this.minRightKneeInRep, angles.rightKneeAngle);
+        this.minLeftHipInRep = Math.min(this.minLeftHipInRep, angles.leftHipAngle);
+        this.minRightHipInRep = Math.min(this.minRightHipInRep, angles.rightHipAngle);
         this.maxTorsoLeanInRep = Math.max(this.maxTorsoLeanInRep, torsoLean);
+        this.bottomTimestamp = now;
 
         if (isLastRep) {
           const elapsed = now - this.holdStartTimestamp;
@@ -255,14 +277,35 @@ export class SquatAnalyzer implements IExerciseAnalyzer {
             feedbackType = 'ERROR';
           }
 
+          const durationMs = now - this.repStartTime;
+          const eccentricMs = Math.max(0, this.bottomTimestamp - this.repStartTime);
+          const concentricMs = Math.max(0, now - this.bottomTimestamp);
+          const asymmetry = Math.abs(this.minLeftKneeInRep - this.minRightKneeInRep);
+          const rom = Math.max(0, this.startingKneeAngle - this.minKneeAngleInRep);
+          const margin = this.targetAngle - this.minKneeAngleInRep;
+
           completedRecord = {
             repNumber: this.correctReps,
             isCorrect,
-            maxKneeDepthAngle: this.minKneeAngleInRep,
-            minTorsoAngle: this.maxTorsoLeanInRep,
-            durationMs: now - this.repStartTime,
+            maxKneeDepthAngle: Math.round(this.minKneeAngleInRep * 10) / 10,
+            minTorsoAngle: Math.round(this.maxTorsoLeanInRep * 10) / 10,
+            durationMs,
             issues: issuesList,
             timestamp: now,
+            leftKneeAngle: Math.round(this.minLeftKneeInRep * 10) / 10,
+            rightKneeAngle: Math.round(this.minRightKneeInRep * 10) / 10,
+            leftHipAngle: Math.round(this.minLeftHipInRep * 10) / 10,
+            rightHipAngle: Math.round(this.minRightHipInRep * 10) / 10,
+            startingAngle: Math.round(this.startingKneeAngle * 10) / 10,
+            peakFlexionAngle: Math.round(this.minKneeAngleInRep * 10) / 10,
+            endingAngle: Math.round(kneeAngle * 10) / 10,
+            rangeOfMotion: Math.round(rom * 10) / 10,
+            targetThresholdAngle: this.targetAngle,
+            angleMargin: Math.round(margin * 10) / 10,
+            eccentricDurationMs: eccentricMs,
+            concentricDurationMs: concentricMs,
+            isometricDurationMs: isLastRep ? (now - this.holdStartTimestamp) : 0,
+            asymmetryDegrees: Math.round(asymmetry * 10) / 10,
           };
 
           this.repHistory.push(completedRecord);

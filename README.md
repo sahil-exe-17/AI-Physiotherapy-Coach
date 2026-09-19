@@ -35,14 +35,26 @@ Designed with a **minimalistic, soft aesthetic light theme**, KInetiQ bridges mo
 - **Non-Intrusive HUD**: Clear rep counters, pace indicators, depth progress bars, and high-contrast feedback banners.
 - **Elegant Skeleton Overlay**: Subtle organic emerald & sage joint overlay on camera view without neon glare.
 
-### 4. 📊 Automated Background Dataset Generator (Excel `.xlsx` & CSV)
-- **Silent Logging**: Operates completely in the background without cluttering the user interface.
-- **Multi-Sheet Workbook Structure**:
-  1. **`Repetitions`**: Timestamp, Session ID, Exercise, Intensity, Rep Number, Form Result (`CORRECT` vs `INCORRECT`), Peak Angles, Duration, and Posture Issues.
-  2. **`Sessions`**: Target Reps, Total Attempts, Completed/Correct/Incorrect, Accuracy %, Quality Score, and Primary Posture Focus.
-  3. **`Kinematics_Telemetry`**: 10–30 FPS time-series joint angles (knees, hips, torso, left/right elbows) and pose confidence.
+### 4. 📊 Reusable Research & ML Dataset Engine (Excel `.xlsx` & CSV)
+- **Silent Background Logging**: Every rep, workout session, and continuous movement frame is automatically recorded without interrupting the user.
+- **4-Sheet Comprehensive Architecture**:
+  1. **`Repetitions` (Granular Rep-Level Features)**:
+     - `Rep_ID`, `Session_ID`, `Timestamp`, `Epoch_ms`, `Exercise_Name`, `Exercise_Type`, `Intensity_Mode`, `Rep_Number`
+     - **ML Ground Truth**: `Form_Result` (`PASS`/`FAIL`), `Is_Valid` (`1`/`0` binary target label)
+     - **Biomechanical Angles**: `Target_Threshold_Deg`, `Peak_Flexion_Deg`, `Starting_Angle_Deg`, `Ending_Angle_Deg`, `Range_Of_Motion_Deg`, `Threshold_Margin_Deg` (positive = passed; negative = shallow)
+     - **Bilateral Metrics & Asymmetry**: `Left_Knee_Min_Deg`, `Right_Knee_Min_Deg`, `Knee_Asymmetry_Deg` (|Left - Right|), `Left_Hip_Min_Deg`, `Right_Hip_Min_Deg`, `Left_Elbow_Min_Deg`, `Right_Elbow_Min_Deg`, `Elbow_Asymmetry_Deg`
+     - **Spine & Trunk Posture**: `Max_Torso_Lean_Deg` (degrees relative to vertical)
+     - **Tempo & Phase Timings**: `Total_Duration_Sec`, `Eccentric_Phase_Sec` (descent), `Concentric_Phase_Sec` (ascent), `Isometric_Hold_Sec`, `Avg_Angular_Velocity_DegSec`
+     - **Fault Classifiers**: `Fault_Shallow_Depth` (0/1), `Fault_Torso_Lean` (0/1), `Fault_Asymmetry` (0/1), `Issues_Count`, `Detected_Issues_List`, `Quality_Score_Pct`
+  2. **`Sessions` (Set-Level Clinical Summary)**:
+     - `Target_Reps`, `Total_Attempts`, `Completed_Reps`, `Correct_Reps`, `Incorrect_Reps`, `Incomplete_Reps`
+     - `Accuracy_Pct`, `Movement_Quality_Score`, `Total_Duration_Sec`, `Avg_Rep_Duration_Sec`, `Avg_Peak_Depth_Deg`, `Avg_Torso_Lean_Deg`, `Avg_Asymmetry_Deg`, `Most_Frequent_Issue`
+  3. **`Kinematics_Telemetry` (Time-Series Frame Data)**:
+     - 10–30 FPS real-time trajectory logging: `Frame_Index`, `Timestamp`, `Time_Rel_Sec`, `Movement_State`, `Progress_Pct`, `Left_Knee_Deg`, `Right_Knee_Deg`, `Mean_Knee_Deg`, `Left_Hip_Deg`, `Right_Hip_Deg`, `Torso_Lean_Deg`, `Left_Elbow_Deg`, `Right_Elbow_Deg`, and `Pose_Confidence`.
+  4. **`Data_Dictionary` (Complete Codebook)**:
+     - Built-in metadata dictionary detailing every variable's sheet, data type, measurement unit, anatomical landmarks used, and clinical interpretation.
 - **Local Persistence & Instant Export**:
-  - Automatically syncs to [`datasets/KinetiQ_Dataset_Latest.xlsx`](./datasets/KinetiQ_Dataset_Latest.xlsx) on the local filesystem.
+  - Automatically written directly to [`datasets/KinetiQ_Dataset_Latest.xlsx`](./datasets/KinetiQ_Dataset_Latest.xlsx) on your local disk.
   - Keyboard Shortcut: Press **`Ctrl + Shift + E`** anywhere to download the workbook.
   - Developer Telemetry: Accessible via the **Dev Mode** button in the top navigation.
 

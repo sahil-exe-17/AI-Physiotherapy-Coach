@@ -37,6 +37,23 @@ export interface RepRecord {
   durationMs: number;
   issues: PostureIssue[];
   timestamp: number;
+  // Biomechanical Angle & Symmetry Metrics
+  leftKneeAngle?: number;
+  rightKneeAngle?: number;
+  leftHipAngle?: number;
+  rightHipAngle?: number;
+  leftElbowAngle?: number;
+  rightElbowAngle?: number;
+  startingAngle?: number;
+  peakFlexionAngle?: number;
+  endingAngle?: number;
+  rangeOfMotion?: number;
+  targetThresholdAngle?: number;
+  angleMargin?: number;
+  eccentricDurationMs?: number;
+  concentricDurationMs?: number;
+  isometricDurationMs?: number;
+  asymmetryDegrees?: number;
 }
 
 export interface ThresholdConfig {
