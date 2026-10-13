@@ -33,69 +33,11 @@ export class AngleCalculator {
     let leftAnkle = landmarks[LANDMARK_INDEX.LEFT_ANKLE];
     let rightAnkle = landmarks[LANDMARK_INDEX.RIGHT_ANKLE];
 
-    // Synthesize wrists if hidden/cropped under desk or off-screen
-    if (!leftWrist || leftWrist.visibility < 0.2) {
-      leftWrist = {
-        ...leftElbow,
-        y: Math.min(1.0, leftElbow.y + 0.25),
-        visibility: 0.7,
-      };
-    }
-    if (!rightWrist || rightWrist.visibility < 0.2) {
-      rightWrist = {
-        ...rightElbow,
-        y: Math.min(1.0, rightElbow.y + 0.25),
-        visibility: 0.7,
-      };
-    }
-
-    // Synthesize hips if off-screen
-    if (!leftHip || leftHip.visibility < 0.2) {
-      leftHip = {
-        ...leftShoulder,
-        y: Math.min(1.0, leftShoulder.y + 0.35),
-        visibility: 0.7,
-      };
-    }
-    if (!rightHip || rightHip.visibility < 0.2) {
-      rightHip = {
-        ...rightShoulder,
-        y: Math.min(1.0, rightShoulder.y + 0.35),
-        visibility: 0.7,
-      };
-    }
-
-    // Synthesize knees if off-screen
-    if (!leftKnee || leftKnee.visibility < 0.2) {
-      leftKnee = {
-        ...leftHip,
-        y: Math.min(1.0, leftHip.y + 0.35),
-        visibility: 0.7,
-      };
-    }
-    if (!rightKnee || rightKnee.visibility < 0.2) {
-      rightKnee = {
-        ...rightHip,
-        y: Math.min(1.0, rightHip.y + 0.35),
-        visibility: 0.7,
-      };
-    }
-
-    // Synthesize ankles if off-screen
-    if (!leftAnkle || leftAnkle.visibility < 0.2) {
-      leftAnkle = {
-        ...leftKnee,
-        y: Math.min(1.0, leftKnee.y + 0.35),
-        visibility: 0.7,
-      };
-    }
-    if (!rightAnkle || rightAnkle.visibility < 0.2) {
-      rightAnkle = {
-        ...rightKnee,
-        y: Math.min(1.0, rightKnee.y + 0.35),
-        visibility: 0.7,
-      };
-    }
+    // Check visibility for arms and legs
+    const leftArmVis = Math.min(leftShoulder?.visibility ?? 0, leftElbow?.visibility ?? 0, leftWrist?.visibility ?? 0);
+    const rightArmVis = Math.min(rightShoulder?.visibility ?? 0, rightElbow?.visibility ?? 0, rightWrist?.visibility ?? 0);
+    const leftLegVis = Math.min(leftHip?.visibility ?? 0, leftKnee?.visibility ?? 0, leftAnkle?.visibility ?? 0);
+    const rightLegVis = Math.min(rightHip?.visibility ?? 0, rightKnee?.visibility ?? 0, rightAnkle?.visibility ?? 0);
 
     // 1. Knee Angles (Hip -> Knee -> Ankle)
     const leftKneeAngle = calculateJointAngle(leftHip, leftKnee, leftAnkle);
@@ -124,19 +66,20 @@ export class AngleCalculator {
     };
     const torsoLean = calculateAngleWithVertical(midHip, midShoulder);
 
-    // Select active arm (pick arm with smaller elbow angle during curl)
-    const useLeftArm = leftElbowAngle <= rightElbowAngle;
+    // Select active arm (pick arm with good visibility and flexion)
+    const activeArmVis = Math.max(leftArmVis, rightArmVis);
+    const useLeftArm = leftArmVis >= 0.35 && (rightArmVis < 0.35 || leftElbowAngle <= rightElbowAngle);
 
-    const primaryElbowAngle = Math.min(leftElbowAngle, rightElbowAngle);
+    const primaryElbowAngle = useLeftArm ? leftElbowAngle : rightElbowAngle;
     const primaryShoulderAngle = useLeftArm ? leftShoulderAngle : rightShoulderAngle;
 
-    const leftLegVis = (leftHip.visibility + leftKnee.visibility) / 2;
-    const rightLegVis = (rightHip.visibility + rightKnee.visibility) / 2;
+    const activeLegVis = Math.max(leftLegVis, rightLegVis);
     const useLeftLeg = leftLegVis >= rightLegVis;
     const primaryKneeAngle = useLeftLeg ? leftKneeAngle : rightKneeAngle;
     const primaryHipAngle = useLeftLeg ? leftHipAngle : rightHipAngle;
 
     const determineKneeStatus = (angle: number): PoseStatus => {
+      if (activeLegVis < 0.35) return 'UNKNOWN';
       if (angle <= 105) return 'GOOD';
       if (angle <= 135) return 'WARNING';
       return 'UNKNOWN';
@@ -148,7 +91,7 @@ export class AngleCalculator {
         label: 'Knee Angle',
         angleDegrees: primaryKneeAngle,
         status: determineKneeStatus(primaryKneeAngle),
-        confidence: Math.max(leftLegVis, rightLegVis),
+        confidence: activeLegVis,
         points: {
           a: useLeftLeg ? leftHip : rightHip,
           b: useLeftLeg ? leftKnee : rightKnee,
@@ -160,7 +103,7 @@ export class AngleCalculator {
         label: 'Hip Angle',
         angleDegrees: primaryHipAngle,
         status: 'UNKNOWN',
-        confidence: Math.max(leftLegVis, rightLegVis),
+        confidence: activeLegVis,
         points: {
           a: useLeftLeg ? leftShoulder : rightShoulder,
           b: useLeftLeg ? leftHip : rightHip,
@@ -172,7 +115,7 @@ export class AngleCalculator {
         label: 'Torso Lean',
         angleDegrees: torsoLean,
         status: torsoLean > 35 ? 'ERROR' : 'GOOD',
-        confidence: 0.9,
+        confidence: Math.min(leftShoulder?.visibility ?? 0, rightShoulder?.visibility ?? 0),
         points: {
           a: midShoulder,
           b: midHip,
@@ -184,7 +127,7 @@ export class AngleCalculator {
         label: 'Elbow Angle',
         angleDegrees: primaryElbowAngle,
         status: 'GOOD',
-        confidence: 0.9,
+        confidence: activeArmVis,
         points: {
           a: useLeftArm ? leftShoulder : rightShoulder,
           b: useLeftArm ? leftElbow : rightElbow,
@@ -196,7 +139,7 @@ export class AngleCalculator {
         label: 'Shoulder Angle',
         angleDegrees: primaryShoulderAngle,
         status: 'GOOD',
-        confidence: 0.9,
+        confidence: activeArmVis,
         points: {
           a: useLeftArm ? leftHip : rightHip,
           b: useLeftArm ? leftShoulder : rightShoulder,

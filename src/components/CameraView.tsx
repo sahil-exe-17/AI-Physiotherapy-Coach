@@ -103,79 +103,47 @@ export const CameraView: React.FC<CameraViewProps> = ({
       {isCameraActive && (
         <PoseOverlay
           canvasRef={activeCanvasRef}
-          landmarks={landmarks}
-          angles={angles}
           width={dimensions.width}
           height={dimensions.height}
-          status={poseStatus}
-          isPaused={isPaused}
-          hasFormError={hasFormError || !!isMismatch}
         />
       )}
 
       {/* Camera Controls Floating Bar */}
-      <div className="absolute top-4 right-4 z-30 flex items-center gap-2 opacity-90 group-hover:opacity-100 transition-opacity">
+      <div className="absolute top-3 right-3 z-30 flex items-center gap-2 opacity-80 hover:opacity-100 transition-opacity">
         {cameras.length > 1 && (
           <div className="relative">
             <select
               value={activeDeviceId}
               onChange={(e) => onSwitchCamera(e.target.value)}
-              className="bg-white/90 text-stone-800 text-xs rounded-xl px-3 py-1.5 border border-stone-200 shadow-xs focus:outline-none cursor-pointer appearance-none pr-8"
+              className="bg-stone-900/80 text-white text-xs rounded-xl px-2.5 py-1.5 border border-white/20 backdrop-blur-md shadow-xs focus:outline-none cursor-pointer appearance-none pr-7"
             >
               {cameras.map((cam) => (
-                <option key={cam.deviceId} value={cam.deviceId} className="bg-white text-stone-800">
+                <option key={cam.deviceId} value={cam.deviceId} className="bg-stone-900 text-white">
                   {cam.label}
                 </option>
               ))}
             </select>
-            <SwitchCamera className="h-3.5 w-3.5 text-stone-400 absolute right-2.5 top-2 pointer-events-none" />
+            <SwitchCamera className="h-3.5 w-3.5 text-white/60 absolute right-2 top-2 pointer-events-none" />
           </div>
         )}
 
         <button
           onClick={toggleFullscreen}
-          className="p-2 rounded-xl bg-white/90 text-stone-700 border border-stone-200 hover:bg-white transition-all shadow-xs cursor-pointer"
+          className="p-1.5 rounded-xl bg-stone-900/80 text-white/90 border border-white/20 backdrop-blur-md hover:bg-stone-800 transition-all shadow-xs cursor-pointer"
           title={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
         >
           {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
         </button>
       </div>
 
-      {/* Real-time Wrong Exercise Alert Banner Overlay */}
-      {isMismatch && mismatchResult?.warningMessage && (
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40 px-5 py-3 rounded-2xl bg-rose-50 text-rose-900 font-semibold text-xs sm:text-sm flex items-center gap-2.5 shadow-lg backdrop-blur-xl border border-rose-300 animate-bounce max-w-lg text-center">
-          <AlertOctagon className="h-5 w-5 shrink-0 text-rose-600" />
-          <span>{mismatchResult.warningMessage}</span>
-        </div>
-      )}
-
       {/* Session Paused Overlay */}
       {isPaused && (
-        <div className="absolute inset-0 bg-stone-900/40 backdrop-blur-xs z-30 flex flex-col items-center justify-center p-6 text-center space-y-2">
+        <div className="absolute inset-0 bg-stone-900/60 backdrop-blur-xs z-30 flex flex-col items-center justify-center p-6 text-center space-y-2">
           <div className="px-4 py-1.5 rounded-full bg-white text-stone-800 text-xs font-semibold uppercase tracking-wider border border-stone-200 shadow-sm">
             Session Paused
           </div>
-          <p className="text-xs text-white drop-shadow-sm font-medium">Pose tracking is temporarily paused.</p>
+          <p className="text-xs text-white/90 font-medium">Pose tracking is paused.</p>
         </div>
-      )}
-
-      {/* Edge Case Warnings */}
-      {!isPaused && isCameraActive && !isMismatch && (
-        <>
-          {multiplePeopleDetected && (
-            <div className="absolute top-4 left-4 z-30 px-3.5 py-2 rounded-xl bg-amber-500/90 text-slate-950 font-semibold text-xs flex items-center gap-2 shadow-lg backdrop-blur-md animate-bounce">
-              <Users className="h-4 w-4" />
-              <span>Please ensure only one person is visible in frame.</span>
-            </div>
-          )}
-
-          {poseConfidence > 0 && poseConfidence < 0.35 && !multiplePeopleDetected && (
-            <div className="absolute bottom-16 left-1/2 -translate-x-1/2 z-30 px-4 py-2 rounded-xl bg-amber-500/90 text-slate-950 font-semibold text-xs flex items-center gap-2 shadow-lg backdrop-blur-md">
-              <AlertTriangle className="h-4 w-4" />
-              <span>Pose clarity low. Step clearly into camera view.</span>
-            </div>
-          )}
-        </>
       )}
     </div>
   );

@@ -17,11 +17,40 @@ import { ExerciseRegistry } from '../exercises/exerciseRegistry';
 import { IntensityLevel } from '../types/exercise';
 import { DatasetService } from '../services/datasetService';
 
-export const ExerciseSession: React.FC = () => {
-  const [activeExerciseId, setActiveExerciseId] = useState<string>('squat');
-  const [intensityLevel, setIntensityLevel] = useState<IntensityLevel>('MEDIUM');
+import { RecommendedExercisePlan } from '../types/intake';
+
+interface ExerciseSessionProps {
+  plan?: RecommendedExercisePlan | null;
+  initialExerciseId?: string;
+  onOpenAssessment?: () => void;
+}
+
+export const ExerciseSession: React.FC<ExerciseSessionProps> = ({
+  plan,
+  initialExerciseId,
+  onOpenAssessment,
+}) => {
+  const [activeExerciseId, setActiveExerciseId] = useState<string>(
+    initialExerciseId || (plan?.exercises.find((e) => e.enabled)?.id ?? 'squat')
+  );
+  const [intensityLevel, setIntensityLevel] = useState<IntensityLevel>(
+    plan?.intensity ?? 'MEDIUM'
+  );
   const [isDevMode, setIsDevMode] = useState<boolean>(false);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  // Sync initial settings if plan or initialExerciseId updates
+  useEffect(() => {
+    if (initialExerciseId) {
+      setActiveExerciseId(initialExerciseId);
+    } else if (plan?.exercises.length) {
+      const firstEnabled = plan.exercises.find((e) => e.enabled);
+      if (firstEnabled) setActiveExerciseId(firstEnabled.id);
+    }
+    if (plan?.intensity) {
+      setIntensityLevel(plan.intensity);
+    }
+  }, [plan, initialExerciseId]);
 
   // Initialize background dataset recorder
   useEffect(() => {
@@ -111,6 +140,7 @@ export const ExerciseSession: React.FC = () => {
     return (
       <SessionSummary
         summary={summaryMetrics}
+        userName={plan?.userName}
         onTryAgain={handleRestart}
         onBackToExercise={handleRestart}
       />
@@ -138,6 +168,8 @@ export const ExerciseSession: React.FC = () => {
         voiceEnabled={voiceEnabled}
         onToggleVoice={() => setVoiceEnabled(!voiceEnabled)}
         onRestart={handleRestart}
+        onOpenPlan={onOpenAssessment}
+        userName={plan?.userName}
       />
 
       {/* Permission Onboarding Modal */}
@@ -171,7 +203,11 @@ export const ExerciseSession: React.FC = () => {
 
             {/* Calibration Screen Overlay */}
             {sessionStatus === 'CALIBRATION' && (
-              <CalibrationScreen calibration={calibration} onStartExercise={startSession} />
+              <CalibrationScreen
+                calibration={calibration}
+                onStartExercise={startSession}
+                userName={plan?.userName}
+              />
             )}
 
             {/* Session HUD (Active workout overlay) */}
@@ -188,6 +224,7 @@ export const ExerciseSession: React.FC = () => {
                 repProgress={repProgress}
                 durationSeconds={durationSeconds}
                 poseStatus={hasFormError ? 'ERROR' : angles ? angles.kneeAngle.status : 'UNKNOWN'}
+                angles={angles}
                 isHoldingLastRep={isHoldingLastRep}
                 holdCountdownSeconds={holdCountdownSeconds}
                 onCalibrateStanding={handleRestart}
@@ -225,10 +262,50 @@ export const ExerciseSession: React.FC = () => {
 
         {/* Right Sidebar: Telemetry & Info */}
         <div className="w-full lg:w-72 space-y-4">
-          {/* Joint Telemetry Card */}
           <AngleDisplay angles={angles} />
 
-          {/* Exercise Info & Instructions */}
+          {/* Prescribed Clinical Plan Widget */}
+          {plan && (
+            <div className="bg-white rounded-2xl p-4 border border-stone-200/80 shadow-2xs space-y-2.5 text-xs text-stone-600">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-stone-900 uppercase tracking-wide text-[11px]">
+                  Clinical Plan
+                </span>
+                {onOpenAssessment && (
+                  <button
+                    onClick={onOpenAssessment}
+                    className="text-[11px] text-emerald-700 hover:text-emerald-800 font-semibold cursor-pointer underline"
+                  >
+                    Edit Plan
+                  </button>
+                )}
+              </div>
+              <p className="font-semibold text-stone-800 text-xs">{plan.title}</p>
+              <div className="space-y-1.5 pt-1">
+                {plan.exercises
+                  .filter((ex) => ex.enabled)
+                  .map((ex) => (
+                    <button
+                      key={ex.id}
+                      onClick={() => {
+                        setActiveExerciseId(ex.id);
+                        handleRestart();
+                      }}
+                      className={`w-full text-left px-2.5 py-1.5 rounded-xl border text-xs flex items-center justify-between cursor-pointer transition-all ${
+                        activeExerciseId === ex.id
+                          ? 'bg-stone-900 text-white border-stone-900 font-bold shadow-2xs'
+                          : 'bg-stone-50 hover:bg-stone-100 text-stone-700 border-stone-200'
+                      }`}
+                    >
+                      <span className="truncate">{ex.name}</span>
+                      <span className="font-mono text-[10px] opacity-80 shrink-0">
+                        {ex.targetReps}r × {ex.sets}s
+                      </span>
+                    </button>
+                  ))}
+              </div>
+            </div>
+          )}
           <div className="bg-white rounded-2xl p-4.5 border border-stone-200/80 shadow-2xs space-y-2.5 text-xs text-stone-600">
             <h3 className="font-semibold text-stone-900 font-heading text-sm">
               {activeDefinition.name} ({intensityLevel} Pace)

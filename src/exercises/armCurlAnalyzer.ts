@@ -61,16 +61,16 @@ export class ArmCurlAnalyzer implements IExerciseAnalyzer {
     switch (level) {
       case 'LOW':
         this.targetCurlAngle = 85; // Low Mode: Squeeze <= 85°
-        this.extensionThreshold = 100;
+        this.extensionThreshold = 125; // Extension threshold
         break;
       case 'HIGH':
         this.targetCurlAngle = 60; // High Mode: Squeeze <= 60°
-        this.extensionThreshold = 115;
+        this.extensionThreshold = 135;
         break;
       case 'MEDIUM':
       default:
         this.targetCurlAngle = 75; // Med Mode: Squeeze <= 75°
-        this.extensionThreshold = 105;
+        this.extensionThreshold = 130;
         break;
     }
   }
@@ -82,6 +82,19 @@ export class ArmCurlAnalyzer implements IExerciseAnalyzer {
         repCompleted: false,
         activeIssues: [],
         feedbackMessage: 'Position arms in camera view.',
+        feedbackType: 'INSTRUCTION',
+        progressPercentage: 0,
+      };
+    }
+
+    // STRICT ARM VISIBILITY GATE
+    if (angles.elbowAngle.confidence < 0.35) {
+      this.currentState = 'IDLE';
+      return {
+        movementState: 'IDLE',
+        repCompleted: false,
+        activeIssues: [],
+        feedbackMessage: 'Keep your arm, elbow, and wrist clearly visible.',
         feedbackType: 'INSTRUCTION',
         progressPercentage: 0,
       };
@@ -106,33 +119,41 @@ export class ArmCurlAnalyzer implements IExerciseAnalyzer {
     let repCompleted = false;
     let setFinished = false;
     let completedRecord: RepRecord | undefined = undefined;
-    let feedbackMessage = `CURL HAND TOWARD SHOULDER (${this.intensity} MODE)`;
+    let feedbackMessage = `EXTEND ARM DOWN. READY FOR CURL (${this.intensity} MODE)`;
     let feedbackType: 'GOOD' | 'WARNING' | 'ERROR' | 'INSTRUCTION' = 'INSTRUCTION';
 
-    // Calculate progress (0% at extension 130°, 100% at target 75°)
+    // Calculate progress (0% at extension, 100% at target)
     const progressPercentage = Math.min(
       100,
-      Math.max(0, Math.round(((130 - elbowAngle) / (130 - this.targetCurlAngle)) * 100))
+      Math.max(0, Math.round(((this.extensionThreshold - elbowAngle) / (this.extensionThreshold - this.targetCurlAngle)) * 100))
     );
 
-    // Peak-Valley Hysteresis Conditions:
+    // Biomechanical gates:
     const isExtended = elbowAngle >= this.extensionThreshold;
-    const isFlexingUp = elbowAngle < this.extensionThreshold;
+    const isFlexingUp = elbowAngle < this.extensionThreshold - 15; // Must genuinely bend past extension
     const isPeakSqueezeReached = elbowAngle <= this.targetCurlAngle;
 
     let holdCountdownSecs = 5;
 
     switch (this.currentState) {
       case 'IDLE':
-      case 'READY':
         if (isExtended) {
           this.currentState = 'READY';
+          feedbackMessage = `READY. CURL HAND UP TOWARD SHOULDER`;
+          feedbackType = 'INSTRUCTION';
+        } else {
+          feedbackMessage = `LOWER & STRAIGHTEN ARM TO START (>= ${this.extensionThreshold}°)`;
+          feedbackType = 'INSTRUCTION';
+        }
+        break;
+
+      case 'READY':
+        if (isExtended) {
           feedbackMessage = isLastRep
             ? `LAST REP! CURL UP AND HOLD BICEP SQUEEZE FOR 5 SECONDS!`
             : `READY. CURL UP TO <= ${this.targetCurlAngle}° (${this.intensity} MODE)`;
           feedbackType = 'INSTRUCTION';
         } else if (isFlexingUp) {
-          // Immediately enter flex phase on upward movement
           this.currentState = 'DESCENDING';
           this.repStartTime = now;
           this.bottomTimestamp = now;
@@ -219,7 +240,13 @@ export class ArmCurlAnalyzer implements IExerciseAnalyzer {
         break;
 
       case 'ASCENDING': // Lowering arm back down
-        if (isExtended || elbowAngle >= this.minElbowAngleInRep + 30) {
+        if (isExtended) {
+          const durationMs = now - this.repStartTime;
+          if (durationMs < 700) {
+            this.currentState = 'READY';
+            break;
+          }
+
           this.currentState = 'REP_COMPLETE';
           repCompleted = true;
           this.repCooldownUntil = now + 1200;
@@ -239,7 +266,6 @@ export class ArmCurlAnalyzer implements IExerciseAnalyzer {
             feedbackType = 'ERROR';
           }
 
-          const durationMs = now - this.repStartTime;
           const eccentricMs = Math.max(0, this.bottomTimestamp - this.repStartTime);
           const concentricMs = Math.max(0, now - this.bottomTimestamp);
           const asymmetry = Math.abs(this.minLeftElbowInRep - this.minRightElbowInRep);

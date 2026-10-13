@@ -5,11 +5,13 @@ import { CheckCircle2, AlertTriangle, UserCheck, Play, Sparkles, FastForward } f
 interface CalibrationScreenProps {
   calibration: CalibrationStatus;
   onStartExercise: () => void;
+  userName?: string;
 }
 
 export const CalibrationScreen: React.FC<CalibrationScreenProps> = ({
   calibration,
   onStartExercise,
+  userName,
 }) => {
   const { cameraActive, personDetected, warnings } = calibration;
 
@@ -22,7 +24,7 @@ export const CalibrationScreen: React.FC<CalibrationScreenProps> = ({
           <span>Quick Alignment</span>
         </div>
         <h2 className="text-2xl sm:text-3xl font-bold text-white font-heading drop-shadow-sm">
-          Step into Camera View
+          {userName ? `Ready, ${userName}? Step into View` : 'Step into Camera View'}
         </h2>
         <p className="text-xs sm:text-sm text-stone-200">
           Make sure your upper body or full silhouette is framed clearly.

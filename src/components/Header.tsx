@@ -1,5 +1,5 @@
 import React from 'react';
-import { Activity, Terminal, Volume2, VolumeX, RefreshCw, ChevronDown, Zap } from 'lucide-react';
+import { Activity, Terminal, Volume2, VolumeX, RefreshCw, ChevronDown, Zap, ClipboardList } from 'lucide-react';
 import { ExerciseRegistry } from '../exercises/exerciseRegistry';
 import { IntensityLevel } from '../types/exercise';
 
@@ -15,6 +15,8 @@ interface HeaderProps {
   voiceEnabled: boolean;
   onToggleVoice: () => void;
   onRestart: () => void;
+  onOpenPlan?: () => void;
+  userName?: string;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -29,12 +31,14 @@ export const Header: React.FC<HeaderProps> = ({
   voiceEnabled,
   onToggleVoice,
   onRestart,
+  onOpenPlan,
+  userName,
 }) => {
   const exercises = ExerciseRegistry.getAllDefinitions();
 
   return (
     <header className="w-full bg-white/85 backdrop-blur-md border-b border-stone-200/80 px-4 lg:px-8 py-3 flex items-center justify-between z-30 sticky top-0 transition-colors">
-      {/* Brand */}
+      {/* Brand & Patient */}
       <div className="flex items-center gap-3">
         <div className="h-9 w-9 rounded-xl bg-stone-900 flex items-center justify-center shadow-xs">
           <Activity className="h-4.5 w-4.5 text-stone-100" />
@@ -42,9 +46,15 @@ export const Header: React.FC<HeaderProps> = ({
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-lg font-bold tracking-tight text-stone-900 font-heading">KinetiQ</h1>
-            <span className="text-[10px] font-medium tracking-wide uppercase px-2 py-0.5 rounded-full bg-stone-100 text-stone-600 border border-stone-200/80">
-              Physio Motion
-            </span>
+            {userName ? (
+              <span className="text-[10px] font-semibold tracking-wide uppercase px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
+                Patient: {userName}
+              </span>
+            ) : (
+              <span className="text-[10px] font-medium tracking-wide uppercase px-2 py-0.5 rounded-full bg-stone-100 text-stone-600 border border-stone-200/80">
+                Physio Motion
+              </span>
+            )}
           </div>
           <p className="text-[11px] text-stone-400">Minimal Bio-Kinematics Engine</p>
         </div>
@@ -117,6 +127,16 @@ export const Header: React.FC<HeaderProps> = ({
 
       {/* Controls / Toggles */}
       <div className="flex items-center gap-2">
+        {onOpenPlan && (
+          <button
+            onClick={onOpenPlan}
+            className="px-3 py-1.5 rounded-xl bg-stone-900 text-white hover:bg-stone-800 text-xs font-semibold flex items-center gap-1.5 shadow-2xs cursor-pointer transition-all active:scale-98"
+            title="View or edit AI prescribed exercise plan"
+          >
+            <ClipboardList className="h-3.5 w-3.5 text-emerald-400" />
+            <span className="hidden sm:inline">My Plan</span>
+          </button>
+        )}
         <button
           onClick={onToggleVoice}
           className={`p-2 rounded-xl transition-all border cursor-pointer ${

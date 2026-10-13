@@ -45,6 +45,7 @@ export class SquatAnalyzer implements IExerciseAnalyzer {
   private activeRepIssues: Map<string, PostureIssue> = new Map();
   private depthAchieved: boolean = false;
   private repCooldownUntil: number = 0;
+  private standingHipY: number | null = null;
 
   // Last Rep Isometric 5s Hold State
   private isHoldingLastRep: boolean = false;
@@ -85,6 +86,28 @@ export class SquatAnalyzer implements IExerciseAnalyzer {
       };
     }
 
+    const leftHip = landmarks[LANDMARK_INDEX.LEFT_HIP];
+    const rightHip = landmarks[LANDMARK_INDEX.RIGHT_HIP];
+    const leftKnee = landmarks[LANDMARK_INDEX.LEFT_KNEE];
+    const rightKnee = landmarks[LANDMARK_INDEX.RIGHT_KNEE];
+
+    // STRICT LEG VISIBILITY GATE: User must have knees and hips visible in the camera
+    const hasLegsVisible =
+      (leftKnee && leftKnee.visibility >= 0.4 && leftHip && leftHip.visibility >= 0.4) ||
+      (rightKnee && rightKnee.visibility >= 0.4 && rightHip && rightHip.visibility >= 0.4);
+
+    if (!hasLegsVisible || angles.kneeAngle.confidence < 0.35) {
+      this.currentState = 'IDLE';
+      return {
+        movementState: 'IDLE',
+        repCompleted: false,
+        activeIssues: [],
+        feedbackMessage: 'Step back so your knees and legs are clearly visible.',
+        feedbackType: 'INSTRUCTION',
+        progressPercentage: 0,
+      };
+    }
+
     const kneeAngle = angles.kneeAngle.angleDegrees;
     const hipAngle = angles.hipAngle.angleDegrees;
     const torsoLean = angles.torsoLean;
@@ -104,6 +127,21 @@ export class SquatAnalyzer implements IExerciseAnalyzer {
         progressPercentage: 100,
       };
     }
+
+    const currentHipY = (leftHip.y + rightHip.y) / 2;
+    const isStandingPosition = kneeAngle >= 142;
+
+    // Maintain standing baseline hip position
+    if (isStandingPosition && (this.currentState === 'IDLE' || this.currentState === 'READY' || this.currentState === 'REP_COMPLETE')) {
+      if (this.standingHipY === null) {
+        this.standingHipY = currentHipY;
+      } else {
+        this.standingHipY = this.standingHipY * 0.92 + currentHipY * 0.08;
+      }
+    }
+
+    // Measure vertical hip displacement
+    const hipDrop = this.standingHipY !== null ? currentHipY - this.standingHipY : 0;
 
     // Check posture error: Torso Lean > 35 degrees
     const hasLeanError = torsoLean > 35;
@@ -127,16 +165,15 @@ export class SquatAnalyzer implements IExerciseAnalyzer {
     let feedbackMessage = `STAND TALL. READY FOR SQUAT (${this.intensity} MODE)`;
     let feedbackType: 'GOOD' | 'WARNING' | 'ERROR' | 'INSTRUCTION' = 'INSTRUCTION';
 
-    // Calculate progress: 0% at standing 140° knee bend, 100% at targetAngle (125° Low, 105° Med, 90° High)
+    // Calculate progress: 0% at standing 142° knee bend, 100% at targetAngle
     const progressPercentage = Math.min(
       100,
-      Math.max(0, Math.round(((140 - kneeAngle) / (140 - this.targetAngle)) * 100))
+      Math.max(0, Math.round(((142 - kneeAngle) / (142 - this.targetAngle)) * 100))
     );
 
-    // STRICT LEG JOINT RULES (No false triggers from moving shoulders!):
-    // Requires actual knee flexion (kneeAngle < 130°) AND hip flexion (hipAngle < 140°)
-    const isStandingPosition = kneeAngle >= 138;
-    const isRealSquatDown = kneeAngle < 130 && hipAngle < 140; // STRICT DUAL JOINT FLEXION GATE!
+    // STRICT SQUAT GATES:
+    // Requires genuine knee flexion AND hips physically dropping down in space
+    const isRealSquatDown = kneeAngle < 130 && hipAngle < 140 && (this.standingHipY === null || hipDrop >= 0.035);
     const isTrueTargetAngleReached = kneeAngle <= this.targetAngle;
 
     let holdCountdownSecs = 5;
@@ -151,7 +188,6 @@ export class SquatAnalyzer implements IExerciseAnalyzer {
             : `READY. SQUAT DOWN TO <= ${this.targetAngle}°`;
           feedbackType = 'INSTRUCTION';
         } else if (isRealSquatDown) {
-          // Triggers ONLY when knees AND hips flex together! Moving shoulders does NOTHING.
           this.currentState = 'DESCENDING';
           this.repStartTime = now;
           this.bottomTimestamp = now;
@@ -250,6 +286,16 @@ export class SquatAnalyzer implements IExerciseAnalyzer {
         this.maxTorsoLeanInRep = Math.max(this.maxTorsoLeanInRep, torsoLean);
 
         if (isStandingPosition) {
+          const durationMs = now - this.repStartTime;
+
+          // Reject camera glitches / rapid spikes that complete in under 750ms
+          if (durationMs < 750 || (this.standingHipY !== null && Math.abs(currentHipY - this.standingHipY) > 0.08)) {
+            this.currentState = 'READY';
+            feedbackMessage = 'Complete squat at controlled pace.';
+            feedbackType = 'INSTRUCTION';
+            break;
+          }
+
           this.currentState = 'REP_COMPLETE';
           repCompleted = true;
           this.repCooldownUntil = now + 1200;
@@ -277,7 +323,6 @@ export class SquatAnalyzer implements IExerciseAnalyzer {
             feedbackType = 'ERROR';
           }
 
-          const durationMs = now - this.repStartTime;
           const eccentricMs = Math.max(0, this.bottomTimestamp - this.repStartTime);
           const concentricMs = Math.max(0, now - this.bottomTimestamp);
           const asymmetry = Math.abs(this.minLeftKneeInRep - this.minRightKneeInRep);
@@ -357,6 +402,7 @@ export class SquatAnalyzer implements IExerciseAnalyzer {
     this.isHoldingLastRep = false;
     this.holdStartTimestamp = 0;
     this.holdCompleted = false;
+    this.standingHipY = null;
   }
 
   public getMetrics() {

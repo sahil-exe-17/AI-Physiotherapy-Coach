@@ -77,7 +77,7 @@ export function usePoseDetection(
     classifierRef.current.reset();
   }, [activeExerciseId]);
 
-  // Synchronous Direct-to-Canvas Fast Renderer (60 FPS Native ZERO LAG)
+  // Clean, High-Tech Minimalist Canvas Renderer with polished Angle Tags
   const drawDirectCanvas = (
     ctx: CanvasRenderingContext2D,
     lms: PoseLandmark[],
@@ -88,20 +88,22 @@ export function usePoseDetection(
     ctx.clearRect(0, 0, w, h);
     if (!lms || lms.length < 33) return;
 
-    let boneColor = hasFormError ? '#ef4444' : '#10b981';
-    let jointColor = hasFormError ? '#f87171' : '#34d399';
-    let headColor = hasFormError ? '#fca5a5' : '#22d3ee';
+    const strokeColor = hasFormError ? 'rgba(244, 63, 94, 0.85)' : 'rgba(16, 185, 129, 0.75)';
+    const jointDotColor = hasFormError ? '#fb7185' : '#34d399';
 
     ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
 
-    // Draw Skeleton Lines
+    // Draw Only Body & Limb Connections (Keep face completely clear and clean)
     SKELETON_CONNECTIONS.forEach((conn) => {
+      if (conn.group === 'head') return; // Skip head clutter
+
       const fromLm = lms[conn.from];
       const toLm = lms[conn.to];
 
-      if (fromLm && toLm && fromLm.visibility > 0.15 && toLm.visibility > 0.15) {
-        ctx.lineWidth = conn.group === 'head' ? 1.0 : 1.8;
-        ctx.strokeStyle = conn.group === 'head' ? headColor : boneColor;
+      if (fromLm && toLm && fromLm.visibility > 0.3 && toLm.visibility > 0.3) {
+        ctx.lineWidth = 2.0;
+        ctx.strokeStyle = strokeColor;
         ctx.beginPath();
         ctx.moveTo(fromLm.x * w, fromLm.y * h);
         ctx.lineTo(toLm.x * w, toLm.y * h);
@@ -109,58 +111,108 @@ export function usePoseDetection(
       }
     });
 
-    // Draw Joint Dots
-    lms.forEach((lm) => {
-      if (lm.visibility > 0.15) {
+    // Draw Subtle Joint Dots
+    const trackedJoints = [11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28];
+    trackedJoints.forEach((idx) => {
+      const lm = lms[idx];
+      if (lm && lm.visibility > 0.35) {
         const x = lm.x * w;
         const y = lm.y * h;
-        const isHead = lm.id <= 10;
 
         ctx.beginPath();
-        ctx.arc(x, y, isHead ? 2.0 : 3.0, 0, 2 * Math.PI);
-        ctx.fillStyle = isHead ? headColor : jointColor;
+        ctx.arc(x, y, 3.5, 0, 2 * Math.PI);
+        ctx.fillStyle = jointDotColor;
         ctx.fill();
 
+        // Subtle inner dot
         ctx.beginPath();
-        ctx.arc(x, y, isHead ? 1.0 : 1.2, 0, 2 * Math.PI);
+        ctx.arc(x, y, 1.2, 0, 2 * Math.PI);
         ctx.fillStyle = '#ffffff';
         ctx.fill();
       }
     });
 
-    // Draw Angle Tags
+    // Render Minimal, Polished Angle Tags for Active Biomechanical Joints
     if (computedAngles) {
-      const drawAngleTag = (pt: { x: number; y: number }, label: string, deg: number) => {
+      const drawMinimalAngleTag = (
+        pt: { x: number; y: number },
+        label: string,
+        deg: number,
+        isWarningOrError: boolean
+      ) => {
         if (!pt) return;
         const px = pt.x * w;
         const py = pt.y * h;
 
-        ctx.save();
-        ctx.font = 'bold 10px "JetBrains Mono", monospace';
-        const text = `${label}: ${Math.round(deg)}°`;
-        const tw = ctx.measureText(text).width;
-        const bx = Math.max(10, Math.min(w - tw - 20, px + 10));
-        const by = Math.max(10, Math.min(h - 28, py - 10));
+        // Subtle Joint Arc
+        ctx.beginPath();
+        ctx.arc(px, py, 16, 0, Math.PI * 0.75);
+        ctx.strokeStyle = isWarningOrError ? 'rgba(244, 63, 94, 0.7)' : 'rgba(56, 189, 248, 0.6)';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
 
-        ctx.fillStyle = hasFormError ? 'rgba(239, 68, 68, 0.95)' : 'rgba(15, 23, 42, 0.85)';
-        ctx.strokeStyle = hasFormError ? '#ef4444' : '#38bdf8';
+        ctx.save();
+        ctx.font = '600 11px system-ui, -apple-system, sans-serif';
+        const text = `${label} ${Math.round(deg)}°`;
+        const tw = ctx.measureText(text).width;
+        const pillWidth = tw + 16;
+        const pillHeight = 22;
+
+        const bx = Math.max(10, Math.min(w - pillWidth - 10, px + 12));
+        const by = Math.max(10, Math.min(h - pillHeight - 10, py - 11));
+
+        // Glassmorphic Minimal Pill
+        ctx.fillStyle = isWarningOrError ? 'rgba(225, 29, 72, 0.85)' : 'rgba(15, 23, 42, 0.8)';
+        ctx.strokeStyle = isWarningOrError ? '#f43f5e' : 'rgba(56, 189, 248, 0.5)';
         ctx.lineWidth = 1.0;
 
         ctx.beginPath();
-        ctx.roundRect(bx, by, tw + 10, 18, 4);
+        ctx.roundRect(bx, by, pillWidth, pillHeight, 6);
         ctx.fill();
         ctx.stroke();
 
+        // Text
         ctx.fillStyle = '#ffffff';
-        ctx.fillText(text, bx + 5, by + 13);
+        ctx.fillText(text, bx + 8, by + 15);
         ctx.restore();
       };
 
-      if (activeExerciseId === 'squat' && computedAngles.kneeAngle && computedAngles.kneeAngle.confidence > 0.2) {
-        drawAngleTag(computedAngles.kneeAngle.points.b, 'Knee', computedAngles.kneeAngle.angleDegrees);
+      // Knee Angle Tag (for Squats)
+      if (
+        activeExerciseId === 'squat' &&
+        computedAngles.kneeAngle &&
+        computedAngles.kneeAngle.confidence >= 0.35
+      ) {
+        drawMinimalAngleTag(
+          computedAngles.kneeAngle.points.b,
+          'Knee',
+          computedAngles.kneeAngle.angleDegrees,
+          hasFormError || computedAngles.kneeAngle.status === 'ERROR'
+        );
       }
-      if (computedAngles.elbowAngle && computedAngles.elbowAngle.confidence > 0.2) {
-        drawAngleTag(computedAngles.elbowAngle.points.b, 'Elbow', computedAngles.elbowAngle.angleDegrees);
+
+      // Elbow Angle Tag (for Bicep Curls)
+      if (
+        activeExerciseId === 'arm_curl' &&
+        computedAngles.elbowAngle &&
+        computedAngles.elbowAngle.confidence >= 0.35
+      ) {
+        drawMinimalAngleTag(
+          computedAngles.elbowAngle.points.b,
+          'Elbow',
+          computedAngles.elbowAngle.angleDegrees,
+          hasFormError
+        );
+      }
+
+      // Torso Lean Warning Tag if posture breaks
+      if (computedAngles.torsoLean > 30) {
+        drawMinimalAngleTag(
+          computedAngles.torsoAngle.points.a,
+          'Lean',
+          computedAngles.torsoLean,
+          true
+        );
       }
     }
   };
